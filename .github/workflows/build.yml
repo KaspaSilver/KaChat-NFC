@@ -1,0 +1,126 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned: this builds software that holds a wallet backup, so the tools don't change unasked.
+  ANT_JAVACARD_VERSION: v26.05.15
+  ANT_JAVACARD_SHA256: 14f5e25c07b184e4ec02ee148892c2ea7ad5d7e9db8b91109524df8f7d000589
+  JAVACARD_SDKS_COMMIT: 700ec80afdda210a0e62fb6a151a9cddc1acd244
+
+jobs:
+  applet:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: The applet has no randomness or key material
+        run: sh scripts/check-applet-no-keygen.sh
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+      - name: Fetch the pinned Java Card tools
+        run: |
+          mkdir -p .build
+          curl -fsSL -o .build/ant-javacard.jar \
+            "https://github.com/martinpaljak/ant-javacard/releases/download/${ANT_JAVACARD_VERSION}/ant-javacard.jar"
+          echo "${ANT_JAVACARD_SHA256}  .build/ant-javacard.jar" | sha256sum -c -
+          git clone --quiet https://github.com/martinpaljak/oracle_javacard_sdks.git .build/sdks
+          git -C .build/sdks checkout --quiet "${JAVACARD_SDKS_COMMIT}"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ant
+      - name: Build the CAP file
+        run: ant -f applet/build.xml
+      - name: Print its hash
+        run: sha256sum .build/KaChatNFC.cap
+      - uses: actions/upload-artifact@v5
+        with:
+          name: KaChatNFC.cap
+          path: .build/KaChatNFC.cap
+          if-no-files-found: error
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libpcsclite-dev
+      - name: Formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            gofmt -d .
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go test ./...
+
+  helper:
+    needs: applet
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, goos: darwin, goarch: arm64, cgo: '1', ext: '' }
+          - { runner: macos-latest, goos: darwin, goarch: amd64, cgo: '1', ext: '', cflags: '-arch x86_64', ldflags: '-arch x86_64' }
+          - { runner: windows-latest, goos: windows, goarch: amd64, cgo: '0', ext: '.exe' }
+          - { runner: ubuntu-22.04, goos: linux, goarch: amd64, cgo: '1', ext: '' }
+          - { runner: ubuntu-22.04-arm, goos: linux, goarch: arm64, cgo: '1', ext: '' }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/download-artifact@v5
+        with:
+          name: KaChatNFC.cap
+          path: internal/embedded/files
+      - if: matrix.goos == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libpcsclite-dev
+      - name: Build
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+          CGO_CFLAGS: ${{ matrix.cflags }}
+          CGO_LDFLAGS: ${{ matrix.ldflags }}
+        run: |
+          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+            -o "dist/kachat-nfc-${GOOS}-${GOARCH}${{ matrix.ext }}" ./cmd/kachat-nfc
+      - uses: actions/upload-artifact@v5
+        with:
+          name: kachat-nfc-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [applet, test, helper]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release
+          find artifacts -type f -exec cp {} release/ \;
+          (cd release && sha256sum * > SHA256SUMS)
+          cp scripts/install-helper.sh scripts/uninstall-helper.sh scripts/install-helper.ps1 scripts/uninstall-helper.ps1 release/
+          gh release create "${GITHUB_REF_NAME}" release/* --title "${GITHUB_REF_NAME}" --notes-file release/SHA256SUMS

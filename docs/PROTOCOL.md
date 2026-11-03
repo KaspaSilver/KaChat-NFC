@@ -1,0 +1,113 @@
+# Card protocol and backup format
+
+Everything an app needs to use a KaChat-NFC card, over NFC or a contact reader.
+
+## The rule this is built around
+
+The card never generates, derives or uses a wallet key. It stores bytes an app has already
+encrypted and returns them after the right PIN. The applet has no random number generator and no
+key objects, and `scripts/check-applet-no-keygen.sh` fails the build if either is added.
+
+## Identifiers
+
+| | AID |
+|---|---|
+| Package | `F04B41434841544E4643` |
+| Applet | `F04B41434841544E464301` |
+
+`F0` marks a proprietary ID, followed by "KACHAT" and "NFC" in ASCII. An iOS app has to list the
+applet AID under `com.apple.developer.nfc.readersession.iso7816.select-identifiers`.
+
+## Commands
+
+Commands use class `0x80`. Selecting the applet returns the same reply as `STATUS`.
+
+| Command | INS | P1 P2 | Data | PIN verified? | Reply |
+|---|---|---|---|---|---|
+| `STATUS` | `A0` | 0 | none | No | See below |
+| `VERIFY PIN` | `20` | 0 | PIN | No | None |
+| `SET PIN` | `21` | 0 | New PIN, 6 to 16 bytes | Only if a PIN is already set | None |
+| `WRITE BEGIN` | `D0` | Total length | none | Yes | None |
+| `WRITE CHUNK` | `D1` | Offset | Up to 247 bytes, in order | Yes | None |
+| `WRITE COMMIT` | `D2` | 0 | SHA-256 of the whole backup | Yes | None |
+| `READ` | `B0` | Offset | none, Le is the most to return | Yes | Backup bytes. Empty at the end |
+| `WIPE` | `E0` | 0 | none | Yes | None |
+
+P1 is the high byte of a length or offset, and P2 is the low byte.
+
+The `STATUS` reply is 7 bytes:
+
+| Byte | Meaning |
+|---|---|
+| 0 | Protocol version, currently 1 |
+| 1, 2 | Applet version, major and minor |
+| 3 | Flags: `01` PIN set, `02` has a backup, `04` PIN blocked, `08` PIN verified now |
+| 4 | PIN tries remaining |
+| 5, 6 | Largest backup in bytes, currently 2048 |
+
+Status words beyond the usual ISO 7816 ones:
+
+| SW | Meaning |
+|---|---|
+| `63Cx` | Wrong PIN, x tries remaining |
+| `6983` | PIN blocked after 5 wrong tries |
+| `6982` | Verify the PIN first |
+| `6985` | Out of order, such as a chunk with no save started, or no PIN set yet |
+| `6A80` | The commit's hash doesn't match, or a new PIN is the wrong length |
+| `6A88` | There's no backup |
+
+### Behaviour to rely on
+
+- **Saving is all or nothing.** A save goes beside the current backup and replaces it only on a
+  commit whose hash matches. Pulling the card away at any point leaves the old backup, and the save
+  has to start again.
+- **Verification ends with the session.** Deselecting the applet, removing the card or losing power
+  clears it.
+- **A blocked PIN stays blocked.** There's no reset. Reusing the card means reinstalling the applet
+  with the admin key, which erases the backup and PIN.
+
+## Backup format
+
+The card doesn't read this. Apps must follow it so a card works across apps.
+
+The bytes on the card are:
+
+| Offset | Length | Content |
+|---|---|---|
+| 0 | 4 | Magic, ASCII `KNB1` |
+| 4 | 4 | PBKDF2 iterations, big endian. At least 600,000 |
+| 8 | 16 | Random salt |
+| 24 | 12 | Random nonce |
+| 36 | Rest | AES-256-GCM ciphertext, then its 16-byte tag |
+
+- The key is PBKDF2-HMAC-SHA512 of the UTF-8 password, NFKD normalized, with that salt and count,
+  32 bytes long.
+- Use the first 36 bytes as the GCM additional authenticated data.
+- Generate the salt and nonce on the phone or computer, new for every save. Never ask the card.
+- Read the backup back and decrypt it after every save, before telling the user it worked.
+
+The plaintext is UTF-8 JSON:
+
+```json
+{
+  "version": 1,
+  "words": ["abandon", "..."],
+  "passphrase": "optional BIP39 passphrase",
+  "family": "kaspaStandard",
+  "chattingAddressIndex": 0,
+  "alias": "My Account"
+}
+```
+
+`passphrase` is left out when there isn't one. `family` is one of `kaspaStandard`, `kaspaLegacy972`,
+`chainge` or `oneKey`. An app should ignore keys it doesn't know.
+
+## What protects what
+
+| Threat | Protection |
+|---|---|
+| Someone picks up the card | 5 PIN tries, then the seed is still encrypted |
+| Someone records the NFC traffic, including the PIN | The seed is encrypted with a password that never reaches the card |
+| Someone extracts the chip's memory | The password. Make it strong, because this attack can guess offline |
+| Someone replaces the applet | Replace the public admin keys, which the Quick Start flow does |
+| A forgotten PIN or password, or a lost card | Nothing. Keep the seed phrase on paper too |

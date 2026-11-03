@@ -1,0 +1,6 @@
+.build/
+dist/
+*.class
+.DS_Store
+# CI places the applet here before building the helper.
+internal/embedded/files/*.cap

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Builds the applet with ant-javacard. CI supplies ant-javacard.jar and the Oracle SDK; see
+     .github/workflows/build.yml for the pinned versions. -->
+<project name="KaChatNFC" default="cap">
+  <property name="sdk" value="${basedir}/../.build/sdks/jc304_kit"/>
+  <property name="ant-javacard" value="${basedir}/../.build/ant-javacard.jar"/>
+  <taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="${ant-javacard}"/>
+
+  <target name="cap">
+    <javacard jckit="${sdk}">
+      <cap aid="F04B41434841544E4643"
+           package="app.kachat.nfc"
+           version="1.0"
+           output="${basedir}/../.build/KaChatNFC.cap"
+           sources="${basedir}/src"
+           targetsdk="${sdk}">
+        <applet class="app.kachat.nfc.KaChatNFCApplet" aid="F04B41434841544E464301"/>
+      </cap>
+    </javacard>
+  </target>
+</project>
