@@ -23,4 +23,5 @@ RUN set -eu; \
     install -m 755 "kachat-nfc-linux-$arch" /usr/local/bin/kachat-nfc; \
     rm -f "kachat-nfc-linux-$arch" SHA256SUMS
 
-ENTRYPOINT ["sh", "-c", "pcscd --disable-polkit --foreground & exec kachat-nfc serve --listen 0.0.0.0:18421 --internal"]
+# Debian 12's pcscd is built without polkit, so it has no --disable-polkit option and would exit on it.
+ENTRYPOINT ["sh", "-c", "pcscd --foreground & exec kachat-nfc serve --listen 0.0.0.0:18421 --internal"]
