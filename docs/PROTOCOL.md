@@ -26,7 +26,7 @@ Commands use class `0x80`. Selecting the applet returns the same reply as `STATU
 |---|---|---|---|---|---|
 | `STATUS` | `A0` | 0 | none | No | See below |
 | `VERIFY PIN` | `20` | 0 | PIN | No | None |
-| `SET PIN` | `21` | 0 | New PIN, 6 to 16 bytes | Only if a PIN is already set | None |
+| `SET PIN` | `21` | 0 | New PIN, 6 to 16 bytes (KaChat sends 6 digits) | Only if a PIN is already set | None |
 | `WRITE BEGIN` | `D0` | Total length | none | Yes | None |
 | `WRITE CHUNK` | `D1` | Offset | Up to 247 bytes, in order | Yes | None |
 | `WRITE COMMIT` | `D2` | 0 | SHA-256 of the whole backup | Yes | None |
@@ -80,8 +80,9 @@ The bytes on the card are:
 | 24 | 12 | Random nonce |
 | 36 | Rest | AES-256-GCM ciphertext, then its 16-byte tag |
 
-- The key is PBKDF2-HMAC-SHA512 of the UTF-8 password, NFKD normalized, with that salt and count,
-  32 bytes long.
+- The key is PBKDF2-HMAC-SHA512 of the card's PIN as UTF-8, NFKD normalized, with that salt and
+  count, 32 bytes long. The same PIN unlocks the card with `VERIFY PIN`; there's no separate
+  password.
 - Use the first 36 bytes as the GCM additional authenticated data.
 - Generate the salt and nonce on the phone or computer, new for every save. Never ask the card.
 - Read the backup back and decrypt it after every save, before telling the user it worked.
@@ -90,24 +91,34 @@ The plaintext is UTF-8 JSON:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "words": ["abandon", "..."],
-  "passphrase": "optional BIP39 passphrase",
   "family": "kaspaStandard",
   "chattingAddressIndex": 0,
+  "chattingAddress": "kaspa:...",
   "alias": "My Account"
 }
 ```
 
-`passphrase` is left out when there isn't one. `family` is one of `kaspaStandard`, `kaspaLegacy972`,
-`chainge` or `oneKey`. An app should ignore keys it doesn't know.
+- **The BIP39 passphrase is never in the backup.** KaChat only offers a card backup for an account
+  that has one, and a restore asks for the PIN and then for the passphrase, typed in.
+- `chattingAddress` is the account's chatting address. A restore derives it again from the words,
+  the typed passphrase, `family` and `chattingAddressIndex`, and a mismatch means the passphrase
+  was mistyped.
+- `family` is one of `kaspaStandard`, `kaspaLegacy972`, `chainge` or `oneKey`. An app should ignore
+  keys it doesn't know.
+- Version 1 carried an optional `passphrase` and no `chattingAddress`.
 
 ## What protects what
 
 | Threat | Protection |
 |---|---|
-| Someone picks up the card | 5 PIN tries, then the seed is still encrypted |
-| Someone records the NFC traffic, including the PIN | The seed is encrypted with a password that never reaches the card |
-| Someone extracts the chip's memory | The password. Make it strong, because this attack can guess offline |
+| Someone picks up the card | 5 PIN tries, then the PIN is blocked and the backup can't be read |
+| Someone records the NFC traffic, including the PIN | Only the passphrase. The recording holds the PIN and the encrypted backup, so they get the seed words |
+| Someone extracts the chip's memory | Only the passphrase. A 6-digit PIN can be guessed offline, so they get the seed words |
 | Someone replaces the applet | Replace the public admin keys, which the Quick Start flow does |
-| A forgotten PIN or password, or a lost card | Nothing. Keep the seed phrase on paper too |
+| A forgotten PIN or passphrase, or a lost card | Nothing. A backup without its passphrase is useless. Keep the seed phrase and passphrase on paper too |
+
+The seed words alone don't open the account, because the passphrase is part of the wallet. That's
+why only accounts with a passphrase can back up to a card, and why the passphrase has to be strong:
+anyone who gets the words can try passphrases offline.

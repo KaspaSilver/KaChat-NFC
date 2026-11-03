@@ -1,7 +1,7 @@
 # Helper API
 
-The helper lets Kaspa Quick Start's panel find a card and load it. It can't see a PIN, a password or
-a seed, because no endpoint takes one.
+The helper lets Kaspa Quick Start's panel find a card and load it. It can't see a PIN, a passphrase
+or a seed, because no endpoint takes one.
 
 - **Address:** `http://127.0.0.1:18421`
 - **Who it answers:** a loopback origin on any port, plus any `--allow-origin` values. It rejects any
