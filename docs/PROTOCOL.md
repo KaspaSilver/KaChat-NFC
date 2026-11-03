@@ -26,7 +26,7 @@ Commands use class `0x80`. Selecting the applet returns the same reply as `STATU
 |---|---|---|---|---|---|
 | `STATUS` | `A0` | 0 | none | No | See below |
 | `VERIFY PIN` | `20` | 0 | PIN | No | None |
-| `SET PIN` | `21` | 0 | New PIN, 6 to 16 bytes (KaChat sends 6 digits) | Only if a PIN is already set | None |
+| `SET PIN` | `21` | 0 | The PIN, 6 to 16 bytes (KaChat sends 6 digits). Only while no PIN is set | No | None |
 | `WRITE BEGIN` | `D0` | Total length | none | Yes | None |
 | `WRITE CHUNK` | `D1` | Offset | Up to 247 bytes, in order | Yes | None |
 | `WRITE COMMIT` | `D2` | 0 | SHA-256 of the whole backup | Yes | None |
@@ -52,8 +52,8 @@ Status words beyond the usual ISO 7816 ones:
 | `63Cx` | Wrong PIN, x tries remaining |
 | `6983` | PIN blocked after 5 wrong tries |
 | `6982` | Verify the PIN first |
-| `6985` | Out of order, such as a chunk with no save started, or no PIN set yet |
-| `6A80` | The commit's hash doesn't match, or a new PIN is the wrong length |
+| `6985` | Out of order, such as a chunk with no save started, no PIN set yet, or `SET PIN` once a PIN is set |
+| `6A80` | The commit's hash doesn't match, or the PIN is the wrong length |
 | `6A88` | There's no backup |
 
 ### Behaviour to rely on
@@ -63,8 +63,11 @@ Status words beyond the usual ISO 7816 ones:
   has to start again.
 - **Verification ends with the session.** Deselecting the applet, removing the card or losing power
   clears it.
-- **A blocked PIN stays blocked.** There's no reset. Reusing the card means reinstalling the applet
-  with the admin key, which erases the backup and PIN.
+- **The PIN is set once.** `SET PIN` works only while no PIN is set, and a set PIN can't be changed,
+  even after verifying it. Applet 1.0 allowed a change after verifying; 1.1 doesn't.
+- **A blocked or forgotten PIN can't be recovered.** Reusing the card means reinstalling the applet
+  with the admin key, which erases the backup and PIN. Kaspa Quick Start's NFC Card page does this
+  with **Reset this card**.
 
 ## Backup format
 

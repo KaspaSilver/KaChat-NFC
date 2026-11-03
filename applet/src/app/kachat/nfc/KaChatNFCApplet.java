@@ -18,6 +18,9 @@ import javacard.security.MessageDigest;
  *
  * A save is written beside the current backup and only replaces it on a commit whose SHA-256
  * matches, so pulling the card away mid-save leaves the old backup intact.
+ *
+ * The PIN is set once and can't be changed. A forgotten PIN means reinstalling the applet with the
+ * card's admin key, which erases the backup and the PIN.
  */
 public final class KaChatNFCApplet extends Applet {
     private static final byte CLA = (byte) 0x80;
@@ -33,7 +36,7 @@ public final class KaChatNFCApplet extends Applet {
 
     private static final byte PROTOCOL_VERSION = 1;
     private static final byte APPLET_VERSION_MAJOR = 1;
-    private static final byte APPLET_VERSION_MINOR = 0;
+    private static final byte APPLET_VERSION_MINOR = 1;
 
     private static final byte FLAG_PIN_SET = 0x01;
     private static final byte FLAG_HAS_BACKUP = 0x02;
@@ -186,11 +189,11 @@ public final class KaChatNFCApplet extends Applet {
         }
     }
 
-    /** Sets the first PIN, or changes it once the current PIN has been verified. */
+    /** Sets the PIN, once. A PIN that is set can't be changed, even after verifying it. */
     private void setPin(APDU apdu) {
         short length = receiveAll(apdu);
         if (pinSet) {
-            requirePin();
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }
         if (length < PIN_MIN_LENGTH || length > PIN_MAX_LENGTH) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);

@@ -68,7 +68,7 @@ type Status struct {
 }
 
 // AppletVersion is the version of the applet this project currently embeds.
-const AppletVersion = "1.0"
+const AppletVersion = "1.1"
 
 // maxLoginFailures limits proof failures per card each time the helper runs. A mismatch never
 // sends a login, but some cards still count an unfinished one, so this stops anything hammering it.
