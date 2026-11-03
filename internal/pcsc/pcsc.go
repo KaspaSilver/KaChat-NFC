@@ -16,22 +16,22 @@ var ErrNoService = errors.New("smart card service unavailable")
 
 // Windows and PC/SC Lite share these status codes.
 const (
-	scardSuccess          = 0x00000000
-	scardENoSmartcard     = 0x8010000C
-	scardENoService       = 0x8010001D
-	scardENoReaders       = 0x8010002E
-	scardEServiceStopped  = 0x8010001E
-	scardEReaderUnavail   = 0x80100017
-	scardWRemovedCard     = 0x80100069
-	scardWUnpoweredCard   = 0x80100067
-	scardWUnresponsive    = 0x80100066
-	scardWResetCard       = 0x80100068
-	shareShared           = 2
-	protocolT0            = 1
-	protocolT1            = 2
-	leaveCard             = 0
-	resetCard             = 1
-	maxResponse           = 65538
+	scardSuccess         = 0x00000000
+	scardENoSmartcard    = 0x8010000C
+	scardENoService      = 0x8010001D
+	scardENoReaders      = 0x8010002E
+	scardEServiceStopped = 0x8010001E
+	scardEReaderUnavail  = 0x80100017
+	scardWRemovedCard    = 0x80100069
+	scardWUnpoweredCard  = 0x80100067
+	scardWUnresponsive   = 0x80100066
+	scardWResetCard      = 0x80100068
+	shareShared          = 2
+	protocolT0           = 1
+	protocolT1           = 2
+	leaveCard            = 0
+	resetCard            = 1
+	maxResponse          = 65538
 )
 
 func statusError(call string, code uint32) error {

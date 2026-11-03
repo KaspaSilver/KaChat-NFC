@@ -42,15 +42,15 @@ const (
 
 // CardReport is one card's public details.
 type CardReport struct {
-	ATR             string           `json:"atr"`
-	Chip            string           `json:"chip"`
-	Supported       bool             `json:"supported"`
-	State           CardState        `json:"state"`
-	Applet          *gp.AppletStatus `json:"applet,omitempty"`
-	AppletVersion   string           `json:"appletVersion,omitempty"`
-	AdminKeyVersion int              `json:"adminKeyVersion"`
-	AdminKeysChanged bool            `json:"adminKeysChanged"`
-	FreeMemoryBytes int              `json:"freeMemoryBytes"`
+	ATR              string           `json:"atr"`
+	Chip             string           `json:"chip"`
+	Supported        bool             `json:"supported"`
+	State            CardState        `json:"state"`
+	Applet           *gp.AppletStatus `json:"applet,omitempty"`
+	AppletVersion    string           `json:"appletVersion,omitempty"`
+	AdminKeyVersion  int              `json:"adminKeyVersion"`
+	AdminKeysChanged bool             `json:"adminKeysChanged"`
+	FreeMemoryBytes  int              `json:"freeMemoryBytes"`
 }
 
 // ReaderReport is one reader and the card in it, if any.
